@@ -19,7 +19,6 @@ from PIL import Image as PILImage
 
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "TVOJ_TOKEN")
 OWNER_ID = 6919439702
-
 COUNTER_FILE = "counter.json"
 KURS = 118
 POCETNI_BROJ = 150
@@ -77,7 +76,7 @@ def peek_broj():
         data = {}
     return data.get(str(godina), POCETNI_BROJ) + 1, godina
 
-def napravi_pdf(br_fakture, godina, klijent_naziv, datum_od, datum_do, broj_noci, cena_po_noci, output_path):
+def napravi_pdf(br_fakture, godina, klijent_naziv, datum_od, datum_do, broj_noci, cena_po_noci, output_path, valuta="EUR"):
     doc = SimpleDocTemplate(output_path, pagesize=A4,
         leftMargin=2*cm, rightMargin=2*cm, topMargin=2*cm, bottomMargin=2*cm)
     styles = getSampleStyleSheet()
@@ -90,6 +89,17 @@ def napravi_pdf(br_fakture, godina, klijent_naziv, datum_od, datum_do, broj_noci
     ukupno_eur = broj_noci * cena_po_noci
     ukupno_rsd = ukupno_eur * KURS
     rb = br_fakture
+
+    # Formatiranje iznosa prema valuti
+    if valuta == "RSD":
+        iznos_tabela = f'{int(cena_po_noci):,} din'.replace(',', '.')
+        iznos_ukupno_tabela = f'{int(ukupno_eur):,} din'.replace(',', '.')
+        iznos_ukupno = f'<b>UKUPNO: {int(ukupno_eur):,} din</b>'.replace(',', '.')
+    else:
+        iznos_tabela = f'{cena_po_noci:.0f}&#8364;'
+        iznos_ukupno_tabela = f'{ukupno_eur:.2f}&#8364; / {int(ukupno_rsd):,} din'.replace(',', '.')
+        iznos_ukupno = f'<b>UKUPNO: {ukupno_eur:.2f}&#8364; / {int(ukupno_rsd):,}din</b>'.replace(',', '.')
+
     elements = []
 
     # LOGO
@@ -118,60 +128,32 @@ def napravi_pdf(br_fakture, godina, klijent_naziv, datum_od, datum_do, broj_noci
     elements.append(Spacer(1, 0.5*cm))
 
     # TABELA
-    hr = [
-        Paragraph('<b>R.B</b>', bold),
-        Paragraph('<b>Sifra</b>', bold),
-        Paragraph('<b>Naziv dobra\nUsluge</b>', bold),
-        Paragraph('<b>Jedinica\nmere</b>', bold),
-        Paragraph('<b>Kolicina</b>', bold),
-        Paragraph('<b>Cena po\nnoci</b>', bold),
-        Paragraph('<b>Ukupna\nnaknada</b>', bold),
-    ]
-    dr = [
-        Paragraph(str(rb), norm),
-        Paragraph('', norm),
-        Paragraph(f'{datum_od} -\n{datum_do}', norm),
-        Paragraph('Dan', norm),
-        Paragraph(str(broj_noci), norm),
-        Paragraph(f'{cena_po_noci:.0f}&#8364;', norm),
-        Paragraph(f'{ukupno_eur:.2f}&#8364; / {int(ukupno_rsd):,} din'.replace(',', '.'), norm),
-    ]
+    hr = [Paragraph('<b>R.B</b>',bold), Paragraph('<b>Sifra</b>',bold), Paragraph('<b>Naziv dobra\nUsluge</b>',bold), Paragraph('<b>Jedinica\nmere</b>',bold), Paragraph('<b>Kolicina</b>',bold), Paragraph('<b>Cena po\nnoci</b>',bold), Paragraph('<b>Ukupna\nnaknada</b>',bold)]
+    dr = [Paragraph(str(rb),norm), Paragraph('',norm), Paragraph(f'{datum_od} -\n{datum_do}',norm), Paragraph('Dan',norm), Paragraph(str(broj_noci),norm), Paragraph(iznos_tabela,norm), Paragraph(iznos_ukupno_tabela,norm)]
     cw = [1.5*cm, 1.5*cm, 3.5*cm, 2*cm, 2*cm, 2.5*cm, 3.5*cm]
     tbl = Table([hr, dr], colWidths=cw, rowHeights=[1.2*cm, 1.8*cm])
-    tbl.setStyle(TableStyle([
-        ('BOX',      (0,0), (-1,-1), 0.8, colors.black),
-        ('INNERGRID',(0,0), (-1,-1), 0.5, colors.black),
-        ('VALIGN',   (0,0), (-1,-1), 'MIDDLE'),
-        ('FONTSIZE', (0,0), (-1,-1), 9),
-    ]))
+    tbl.setStyle(TableStyle([('BOX',(0,0),(-1,-1),0.8,colors.black),('INNERGRID',(0,0),(-1,-1),0.5,colors.black),('VALIGN',(0,0),(-1,-1),'MIDDLE'),('FONTSIZE',(0,0),(-1,-1),9)]))
     elements.append(tbl)
     elements.append(Spacer(1, 0.5*cm))
 
-    # UKUPNO
-    elements.append(Paragraph(
-        f'<b>UKUPNO: {ukupno_eur:.2f}&#8364; / {int(ukupno_rsd):,}din</b>'.replace(',', '.'),
-        ukupno_s
-    ))
+    elements.append(Paragraph(iznos_ukupno, ukupno_s))
     elements.append(Spacer(1, 1.5*cm))
 
-    # POTPIS BLOK
+    # POTPIS
     potpis_blok = Table([
         [Paragraph('<b>Izdao</b>', bold),              Paragraph('<b>Primio</b>', primio_s)],
         [Paragraph('<b>Ivan Svetic</b>', norm),         Paragraph('', norm)],
         [Paragraph('<b>I&amp;I Apartments</b>', norm),  Paragraph('', norm)],
         [Spacer(1, 1.5*cm),                             Spacer(1, 1.5*cm)],
-        [
-            HRFlowable(width=6*cm, thickness=1, color=colors.black),
-            HRFlowable(width=5*cm, thickness=1, color=colors.black),
-        ],
+        [HRFlowable(width=6*cm, thickness=1, color=colors.black), HRFlowable(width=5*cm, thickness=1, color=colors.black)],
     ], colWidths=[9*cm, 8*cm])
     potpis_blok.setStyle(TableStyle([
-        ('VALIGN',       (0,0), (-1,-1), 'TOP'),
-        ('LEFTPADDING',  (0,0), (-1,-1), 0),
-        ('RIGHTPADDING', (0,0), (-1,-1), 0),
-        ('TOPPADDING',   (0,0), (-1,-1), 2),
-        ('BOTTOMPADDING',(0,0), (-1,-1), 2),
-        ('LEFTPADDING',  (1,4), (1,4), 1.5*cm),
+        ('VALIGN',(0,0),(-1,-1),'TOP'),
+        ('LEFTPADDING',(0,0),(-1,-1),0),
+        ('RIGHTPADDING',(0,0),(-1,-1),0),
+        ('TOPPADDING',(0,0),(-1,-1),2),
+        ('BOTTOMPADDING',(0,0),(-1,-1),2),
+        ('LEFTPADDING',(1,4),(1,4),1.5*cm),
     ]))
     elements.append(potpis_blok)
     doc.build(elements)
@@ -180,21 +162,24 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "👋 I&I Apartments - Bot za Fakture\n\n"
         "Komanda:\n"
-        "/faktura NazivKlijenta DatumOd DatumDo BrojNoci CenaPoNoci mail\n\n"
-        "Primjer:\n"
-        "/faktura Yanfeng_International 29.05.2026 12.06.2026 14 30 mail@firma.com\n\n"
-        "Za naziv sa razmakom koristi underscore: Yanfeng_International\n"
-        "PDF dolazi direktno ovdje u Telegram."
+        "/faktura NazivKlijenta DatumOd DatumDo BrojNoci Cijena mail EUR\n"
+        "/faktura NazivKlijenta DatumOd DatumDo BrojNoci Cijena mail RSD\n\n"
+        "Primjeri:\n"
+        "/faktura Yanfeng_International 29.05.2026 12.06.2026 14 30 mail@firma.com EUR\n"
+        "/faktura Lokalna_Firma 29.05.2026 12.06.2026 14 3540 mail@firma.com RSD"
     )
 
 async def faktura_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     args = ctx.args
-    if len(args) != 6:
+    if len(args) != 7:
         await update.message.reply_text(
-            "❌ Pogresan format!\n"
-            "/faktura NazivKlijenta DatumOd DatumDo BrojNoci CenaPoNoci mail\n\n"
-            "Primjer:\n"
-            "/faktura Yanfeng_International 29.05.2026 12.06.2026 14 30 mail@firma.com"
+            "❌ Pogresan format!\n\n"
+            "/faktura NazivKlijenta DatumOd DatumDo BrojNoci Cijena mail EUR\n"
+            "/faktura NazivKlijenta DatumOd DatumDo BrojNoci Cijena mail RSD\n\n"
+            "Primjer EUR:\n"
+            "/faktura Yanfeng_Int 29.05.2026 12.06.2026 14 30 mail@firma.com EUR\n\n"
+            "Primjer RSD:\n"
+            "/faktura Lokalna_Firma 29.05.2026 12.06.2026 14 3540 mail@firma.rs RSD"
         )
         return
 
@@ -202,6 +187,11 @@ async def faktura_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     datum_od = args[1]
     datum_do = args[2]
     to_email = args[5]
+    valuta = args[6].upper()
+
+    if valuta not in ["EUR", "RSD"]:
+        await update.message.reply_text("❌ Valuta mora biti EUR ili RSD!")
+        return
 
     try:
         broj_noci = int(args[3])
@@ -217,14 +207,19 @@ async def faktura_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
             pdf_path = tmp.name
 
-        napravi_pdf(br_fakture, godina, klijent_naziv, datum_od, datum_do, broj_noci, cena_po_noci, pdf_path)
+        napravi_pdf(br_fakture, godina, klijent_naziv, datum_od, datum_do, broj_noci, cena_po_noci, pdf_path, valuta)
 
         ukupno = broj_noci * cena_po_noci
+        if valuta == "RSD":
+            iznos_caption = f"{int(ukupno):,} din".replace(",", ".")
+        else:
+            iznos_caption = f"{ukupno:.0f}€ / {int(ukupno*KURS):,} din".replace(",", ".")
+
         caption = (
             f"✅ Faktura {br_fakture}/{godina}\n\n"
             f"👤 {klijent_naziv}\n"
             f"📅 {datum_od} - {datum_do} ({broj_noci} noci)\n"
-            f"💶 {ukupno:.0f}€ / {int(ukupno*KURS):,} din\n"
+            f"💶 {iznos_caption}\n"
             f"📧 Za: {to_email}"
         )
 
@@ -234,9 +229,7 @@ async def faktura_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             filename=f"Faktura_{br_fakture}_{godina}.pdf",
             caption=caption
         )
-        await update.message.reply_text(
-            f"✅ Faktura {br_fakture}/{godina} generisana!\nProslijedi klijentu: {to_email}"
-        )
+        await update.message.reply_text(f"✅ Faktura {br_fakture}/{godina} generisana!\nProslijedi klijentu: {to_email}")
         os.unlink(pdf_path)
 
     except Exception as e:
